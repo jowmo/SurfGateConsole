@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Surf Gate Controller</string>
+    <string name="status_start_text">LOADING...</string>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
