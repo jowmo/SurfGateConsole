@@ -1,4 +1,4 @@
-package com.morris.myapplication;
+package com.morris.surfgate;
 
 import org.junit.Test;
 

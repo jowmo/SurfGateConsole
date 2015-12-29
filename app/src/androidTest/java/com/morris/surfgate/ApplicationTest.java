@@ -1,4 +1,4 @@
-package com.morris.myapplication;
+package com.morris.surfgate;
 
 import android.app.Application;
 import android.test.ApplicationTestCase;

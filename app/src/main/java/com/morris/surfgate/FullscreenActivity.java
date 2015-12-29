@@ -1,16 +1,17 @@
-package com.morris.myapplication;
+package com.morris.surfgate;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
+import java.util.Date;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -91,27 +92,12 @@ public class FullscreenActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        //this.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        //this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_fullscreen);
 
         mVisible = true;
-        //mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = findViewById(R.id.fullscreen_content);
-        updateProgressText();
-
-
-        // Set up the user interaction to manually show or hide the system UI.
-        mContentView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                toggle();
-            }
-        });
-
+        setProgressBar(mProgressValue);
     }
 
     @Override
@@ -150,6 +136,7 @@ public class FullscreenActivity extends AppCompatActivity {
     private void show() {
         // Show the system bar
         mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        setProgressBar(mProgressValue);
         mVisible = true;
 
         // Schedule a runnable to display UI elements after a delay
@@ -210,5 +197,10 @@ public class FullscreenActivity extends AppCompatActivity {
             mProgressValue -= 10;
         }
         setProgressBar(mProgressValue);
+    }
+
+    public void openLogView(View view) {
+        Intent myIntent = new Intent(this, LogActivity.class);
+        startActivity(myIntent);
     }
 }

@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/background_blue"
-    tools:context="com.morris.myapplication.FullscreenActivity">
+    tools:context="com.morris.surfgate.FullscreenActivity">
 
 
 
@@ -40,6 +40,7 @@
                 android:layout_gravity="center" />
 
             <ImageButton
+                android:onClick="openLogView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/imageButton"
@@ -71,7 +72,7 @@
                     android:layout_height="wrap_content"
                     android:text="7"
                     android:id="@+id/txt_satelites"
-                    android:textStyle="bold|italic"
+                    android:textStyle="bold"
                     android:typeface="sans"
                     android:textSize="30sp"
                     android:layout_weight="1"
@@ -120,7 +121,7 @@
                     android:layout_height="wrap_content"
                     android:text="MPH"
                     android:id="@+id/textView"
-                    android:textStyle="bold|italic"
+                    android:textStyle="bold"
                     android:typeface="sans"
                     android:textSize="30sp"
                     android:layout_gravity="center"
