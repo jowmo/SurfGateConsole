@@ -1,7 +1,15 @@
 package com.morris.surfgate;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.ComponentName;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -11,7 +19,11 @@ import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import java.util.Date;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -31,6 +43,21 @@ public class FullscreenActivity extends AppCompatActivity {
     private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
 
     private static int mProgressValue = 0;
+
+
+// bluetooth test 2
+    BluetoothAdapter mBluetoothAdapter;
+    BluetoothSocket mmSocket;
+    BluetoothDevice mmDevice;
+    OutputStream mmOutputStream;
+    InputStream mmInputStream;
+    Thread workerThread;
+    byte[] readBuffer;
+    int readBufferPosition;
+    int counter;
+    volatile boolean stopWorker;
+// bluetooth test 2
+
 
     /**
      * Some older devices needs a small delay between UI widget updates
@@ -98,6 +125,24 @@ public class FullscreenActivity extends AppCompatActivity {
         mVisible = true;
         mContentView = findViewById(R.id.fullscreen_content);
         setProgressBar(mProgressValue);
+
+        //Intent intent = new Intent(this, MyService.class);
+        //bindService(intent, mConnnection, Context.BIND_AUTO_CREATE);
+
+        //btAdapter = BluetoothAdapter.getDefaultAdapter();
+        //CheckBTState();
+
+        findBT();
+
+        try
+        {
+            openBT();
+        }
+        catch (IOException ex) {
+            AlertBox("Bluetooth Exception in openBT()", ex.getMessage());
+        }
+
+
     }
 
     @Override
@@ -108,6 +153,12 @@ public class FullscreenActivity extends AppCompatActivity {
         // created, to briefly hint to the user that UI controls
         // are available.
         delayedHide(100);
+    }
+
+
+    @Override
+    protected void onStop() {
+        super.onStop();
     }
 
     private void toggle() {
@@ -164,19 +215,124 @@ public class FullscreenActivity extends AppCompatActivity {
         updateProgressText();
     }
 
+
+    /*
+     * Bluetooth Stuff...
+     */
+    private static final int REQUEST_ENABLE_BT = 1;
+    private BluetoothAdapter btAdapter = null;
+    private BluetoothSocket btSocket = null;
+    private OutputStream outStream = null;
+
+    // Bluetooth SPP UUID and SurfGate Controller (Arduino) Mac Address
+    private static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final String ARDUINO_MAC_ADDRESS = "20:15:07:24:52:99";
+
+
+
+    // format: fix, satellies, knots, direction, in_motion, percent_deployed
+    public void ParseResponse(String data) {
+        try {
+            sendMessage("OK");
+        }
+        catch (IOException ioe) {
+
+        }
+
+        String fix = "0";
+        int sats = 0;
+        float knots = 0;
+        String direction = "";
+        String in_motion = "";
+        int gate_angle = 0;
+
+        if (data.contains(",")) {
+            String[] parts = data.split(",");
+            fix = parts[0];
+            sats = SafeInt(parts[1], 0);
+            knots = SafeFloat(parts[2], 0);
+            direction = parts[3];
+            in_motion = parts[4];
+            gate_angle = SafeInt(parts[5], 0);
+        }
+
+        // Update UI
+        setFixStatus(fix);
+        setSatelliteCount(sats);
+        setSpeed(knots, true);
+        setDirection(direction);
+        setMotionStatus(in_motion);
+        setProgressBar(gate_angle);
+
+    }
+
+    private void setSpeed(float speed, boolean in_knots) {
+        TextView text = (TextView) findViewById(R.id.txt_speed);
+        if (in_knots) {
+            speed *= 1.15078;
+        }
+        text.setText(String.format("%.2f", speed));
+    }
+
+    public int SafeInt(String s, int def) {
+        int tmp;
+        try {
+            tmp = Integer.parseInt(s);
+        }
+        catch (Exception e) {
+            tmp = def;
+        }
+        return tmp;
+    }
+
+
+    public float SafeFloat(String s, float def) {
+        float tmp;
+        try {
+            tmp = Float.parseFloat(s);
+        }
+        catch (Exception e) {
+            tmp = def;
+        }
+        return tmp;
+    }
+
+
+    public void AlertBox( String title, String message ){
+        new AlertDialog.Builder(this)
+        .setTitle( title )
+        .setMessage( message + " Press OK to exit." )
+        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+        public void onClick(DialogInterface arg0, int arg1) {
+            finish();
+        }
+            }).show();
+        }
+
+
     /**
      * Functional Stuff...
      */
     public void rightClicked(View view) {
-        setStatus("ENABLE RIGHT");
+        try {
+            sendMessage("STARBOARD");
+        } catch (IOException ignore) {}
     }
 
     public void offClicked(View view) {
         setStatus("SYSTEM DISABLED");
+        try {
+            sendMessage("DISABLED");
+        } catch (IOException ignore) {}
+
     }
 
     public void leftClicked(View view) {
-        setStatus("ENABLE LEFT");
+        try {
+            sendMessage("PORT");
+        } catch (IOException ignore) {
+            setStatus("sendMessage Exception!");
+        }
     }
 
     private void updateProgressText() {
@@ -202,5 +358,157 @@ public class FullscreenActivity extends AppCompatActivity {
     public void openLogView(View view) {
         Intent myIntent = new Intent(this, LogActivity.class);
         startActivity(myIntent);
+    }
+
+
+    void findBT()
+    {
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if(mBluetoothAdapter == null)
+        {
+            setStatus("No bluetooth adapter available");
+        }
+
+        if(!mBluetoothAdapter.isEnabled())
+        {
+            Intent enableBluetooth = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBluetooth, 0);
+        }
+
+        //mmDevice = mBluetoothAdapter.getRemoteDevice(ARDUINO_MAC_ADDRESS);
+
+        Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
+        if(pairedDevices.size() > 0)
+        {
+            for(BluetoothDevice device : pairedDevices)
+            {
+                if(device.getName().equals("SurfGate"))
+                {
+                    mmDevice = device;
+                    setStatus("Bluetooth Device Found");
+                    break;
+                }
+            }
+        }
+        else {
+            setStatus("Bluetooth Device NOT Found");
+        }
+
+
+    }
+
+    void openBT() throws IOException
+    {
+        UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); //Standard SerialPortService ID
+        mmSocket = mmDevice.createInsecureRfcommSocketToServiceRecord(uuid);
+        mmSocket.connect();
+        mmOutputStream = mmSocket.getOutputStream();
+        mmInputStream = mmSocket.getInputStream();
+
+        setStatus("Bluetooth Opened");
+        beginListenForData();
+    }
+
+    void beginListenForData()
+    {
+        final Handler handler = new Handler();
+        final byte delimiter = 10; //This is the ASCII code for a newline character
+
+        stopWorker = false;
+        readBufferPosition = 0;
+        readBuffer = new byte[1024];
+
+        for (int i=0; i<10000; i++) {
+            try {
+                int bytesAvailable = mmInputStream.available();
+                if (bytesAvailable > 0) {
+                    setStatus("Bytes!!!");
+                }
+            } catch (IOException ig) {
+            }
+        }
+        workerThread = new Thread(new Runnable()
+        {
+            public void run()
+            {
+                while(!Thread.currentThread().isInterrupted() && !stopWorker)
+                {
+                    try {
+                        Thread.currentThread().sleep(1000);
+                    } catch (Exception time) {}
+                    try
+                    {
+                        final int bytesAvailable = mmInputStream.available();
+                        if(bytesAvailable > 0)
+                        {
+                            byte[] packetBytes = new byte[bytesAvailable];
+                            mmInputStream.read(packetBytes);
+                            for(int i=0;i<bytesAvailable;i++)
+                            {
+                                byte b = packetBytes[i];
+                                if(b == delimiter)
+                                {
+                                    byte[] encodedBytes = new byte[readBufferPosition];
+                                    System.arraycopy(readBuffer, 0, encodedBytes, 0, encodedBytes.length);
+                                    final String data = new String(encodedBytes, "US-ASCII");
+                                    readBufferPosition = 0;
+
+                                    handler.post(new Runnable()
+                                    {
+                                        public void run()
+                                        {
+                                            ParseResponse(data);
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    readBuffer[readBufferPosition++] = b;
+                                }
+                            }
+                        }
+                    }
+                    catch (IOException ex)
+                    {
+                        stopWorker = true;
+                    }
+                }
+            }
+        });
+
+        workerThread.start();
+    }
+
+    void sendMessage(String message) throws IOException
+    {
+        message += "\n";
+        mmOutputStream.write(message.getBytes());
+    }
+
+    void closeBT() throws IOException
+    {
+        stopWorker = true;
+        mmOutputStream.close();
+        mmInputStream.close();
+        mmSocket.close();
+        setStatus("Bluetooth Closed");
+    }
+
+
+    public void setSatelliteCount(int acquiredSats) {
+        TextView text = (TextView) findViewById(R.id.txt_satelites);
+        text.setText(Integer.toString(acquiredSats));
+    }
+
+    public void setFixStatus(String fixStatus) {
+        //this.fixStatus = fixStatus;
+    }
+
+    public void setDirection(String direction) {
+        setStatus("DIRECTION: " + direction);
+    }
+
+    public void setMotionStatus(String motionStatus) {
+        //this.motionStatus = motionStatus;
     }
 }
