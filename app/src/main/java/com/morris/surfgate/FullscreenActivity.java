@@ -5,17 +5,15 @@ import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.ServiceConnection;
-import android.os.IBinder;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -42,7 +40,8 @@ public class FullscreenActivity extends AppCompatActivity {
      */
     private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
 
-    private static int mProgressValue = 0;
+    private static int mPortProgressValue = 0;
+    private static int mStarboardProgressValue = 0;
 
 
 // bluetooth test 2
@@ -124,7 +123,8 @@ public class FullscreenActivity extends AppCompatActivity {
 
         mVisible = true;
         mContentView = findViewById(R.id.fullscreen_content);
-        setProgressBar(mProgressValue);
+        setStarboardProgressBar(mStarboardProgressValue);
+        setPortProgressBar(mPortProgressValue);
 
         //Intent intent = new Intent(this, MyService.class);
         //bindService(intent, mConnnection, Context.BIND_AUTO_CREATE);
@@ -139,7 +139,10 @@ public class FullscreenActivity extends AppCompatActivity {
             openBT();
         }
         catch (IOException ex) {
-            AlertBox("Bluetooth Exception in openBT()", ex.getMessage());
+            AlertBox("Bluetooth IOException in openBT()", ex.getMessage());
+        }
+        catch(Exception e) {
+            AlertBox("Bluetooth Exception in openBT()", e.getMessage());
         }
 
 
@@ -187,7 +190,8 @@ public class FullscreenActivity extends AppCompatActivity {
     private void show() {
         // Show the system bar
         mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        setProgressBar(mProgressValue);
+        setPortProgressBar(mPortProgressValue);
+        setStarboardProgressBar(mStarboardProgressValue);
         mVisible = true;
 
         // Schedule a runnable to display UI elements after a delay
@@ -209,10 +213,18 @@ public class FullscreenActivity extends AppCompatActivity {
         text.setText(message);
     }
 
-    public void setProgressBar(int progress) {
-        ProgressBar bar = (ProgressBar) findViewById(R.id.progress_bar);
+    public void setPortProgressBar(int progress) {
+        ProgressBar bar = (ProgressBar) findViewById(R.id.port_progress_bar);
         bar.setProgress(progress);
-        updateProgressText();
+        mPortProgressValue = progress;
+        updatePortProgressText();
+    }
+
+    public void setStarboardProgressBar(int progress) {
+        ProgressBar bar = (ProgressBar) findViewById(R.id.starboard_progress_bar);
+        bar.setProgress(progress);
+        mStarboardProgressValue = progress;
+        updateStarboardProgressText();
     }
 
 
@@ -244,16 +256,50 @@ public class FullscreenActivity extends AppCompatActivity {
         float knots = 0;
         String direction = "";
         String in_motion = "";
+        int port_position_percent = 0;
+        int starboard_position_percent = 0;
+        String enabled = "0";
         int gate_angle = 0;
+        int gate_duration = 0;
+        String gps_fix_quality = "";
 
         if (data.contains(",")) {
             String[] parts = data.split(",");
-            fix = parts[0];
-            sats = SafeInt(parts[1], 0);
-            knots = SafeFloat(parts[2], 0);
-            direction = parts[3];
-            in_motion = parts[4];
-            gate_angle = SafeInt(parts[5], 0);
+            for (String s: parts) {
+                String[] keyval = s.split(":");
+                String key = keyval[0];
+                String val = keyval[1];
+
+                switch(key) {
+                    case "enabled":
+                        enabled = val;
+                        break;
+                    case "gps_fix":
+                        fix = val;
+                        break;
+                    case "gps_fix_quality":
+                        gps_fix_quality = val;
+                        break;
+                    case "satelites":
+                        sats = SafeInt(val, 0);
+                        break;
+                    case "speed":
+                        knots = SafeFloat(val, 0);
+                        break;
+                    case "direction":
+                        direction = val;
+                        break;
+                    case "port_position_percent":
+                        port_position_percent = SafeInt(val,0);
+                        break;
+                    case "starboard_position_percent":
+                        starboard_position_percent = SafeInt(val,0);
+                        break;
+                    case "gate_duration":
+                        gate_duration = SafeInt(val,0);
+                        break;
+                }
+            }
         }
 
         // Update UI
@@ -262,8 +308,9 @@ public class FullscreenActivity extends AppCompatActivity {
         setSpeed(knots, true);
         setDirection(direction);
         setMotionStatus(in_motion);
-        setProgressBar(gate_angle);
-
+        setPortProgressBar(port_position_percent);
+        setStarboardProgressBar(starboard_position_percent);
+        //setProgressBar(gate_angle);
     }
 
     private void setSpeed(float speed, boolean in_knots) {
@@ -335,12 +382,19 @@ public class FullscreenActivity extends AppCompatActivity {
         }
     }
 
-    private void updateProgressText() {
-        TextView text = (TextView) findViewById(R.id.txt_progress);
-        String textProgress = mProgressValue + "%";
+    private void updatePortProgressText() {
+        TextView text = (TextView) findViewById(R.id.txt_port_progress);
+        String textProgress = mPortProgressValue + "%";
         text.setText(textProgress);
     }
 
+    private void updateStarboardProgressText() {
+        TextView text = (TextView) findViewById(R.id.txt_starboard_progress);
+        String textProgress = mStarboardProgressValue + "%";
+        text.setText(textProgress);
+    }
+
+    /*
     public void gateAdjustIncrease(View view) {
         if (mProgressValue < 100) {
             mProgressValue += 10;
@@ -354,6 +408,7 @@ public class FullscreenActivity extends AppCompatActivity {
         }
         setProgressBar(mProgressValue);
     }
+    */
 
     public void openLogView(View view) {
         Intent myIntent = new Intent(this, LogActivity.class);
@@ -505,7 +560,27 @@ public class FullscreenActivity extends AppCompatActivity {
     }
 
     public void setDirection(String direction) {
-        setStatus("DIRECTION: " + direction);
+        String status = "LOADING...";
+
+        int buttonResource = 0;
+        switch(direction) {
+            case "CENTER":
+                buttonResource = R.drawable.logo_malibu_boats;
+                status = "OFF";
+                break;
+            case "PORT":
+                buttonResource = R.drawable.rsz_arrow_left;
+                status = "SURFER: PORT";
+                break;
+            case "STARBOARD":
+                buttonResource = R.drawable.rsz_arrow_right;
+                status = "SURFER: STARBOARD";
+                break;
+        }
+        ImageButton ib = (ImageButton) findViewById(R.id.controls_direction);
+        ib.setImageResource(buttonResource);
+
+        setStatus(status);
     }
 
     public void setMotionStatus(String motionStatus) {
